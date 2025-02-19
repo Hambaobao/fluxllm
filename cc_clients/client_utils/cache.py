@@ -1,11 +1,15 @@
-import os
-import json
-import hashlib
 from pathlib import Path
 from typing import List, Dict, Any
 
+import os
+import json
+import hashlib
+import multiprocessing
+
 
 class CacheClient:
+    _lock = multiprocessing.Lock()
+    _manager = multiprocessing.Manager()
 
     def __init__(self, cache_file: str | None = None):
         """
@@ -17,7 +21,7 @@ class CacheClient:
         if cache_file is None:
             cache_file = os.getenv("CACHE_FILE", "cache.jsonl")
         self.cache_file = Path(cache_file)
-        self.cache_data: Dict[str, Any] = {}
+        self.cache_data: Dict[str, Any] = self._manager.dict()
         self._load_cache()
 
     def _load_cache(self):
@@ -26,14 +30,15 @@ class CacheClient:
         """
         cache_data = {}
         if self.cache_file.exists():
-            with open(self.cache_file, 'r', encoding='utf-8') as f:
-                for line in f:
-                    data = json.loads(line)
-                    cache_data[data['id']] = data
+            with self._lock:
+                with open(self.cache_file, 'r', encoding='utf-8') as f:
+                    for line in f:
+                        data = json.loads(line)
+                        cache_data[data['id']] = data
             print(f"Found {len(cache_data)} cached samples")
         else:
             Path(self.cache_file).parent.mkdir(parents=True, exist_ok=True)
-        self.cache_data = cache_data
+        self.cache_data.update(cache_data)
 
     def hash(self, sample: Dict) -> str:
         """
@@ -44,7 +49,6 @@ class CacheClient:
         Returns:
             generated hash ID
         """
-        # Convert the data to a sorted JSON string to ensure the same data generates the same hash
         sorted_str = json.dumps(sample, sort_keys=True)
         return hashlib.md5(sorted_str.encode('utf-8')).hexdigest()
 
@@ -63,11 +67,10 @@ class CacheClient:
         else:
             cache_entry = {'id': sample_id, 'response': response}
 
-        self.cache_data[sample_id] = cache_entry
-
-        # Append to the cache file
-        with open(self.cache_file, 'a', encoding='utf-8') as f:
-            f.write(json.dumps(cache_entry, ensure_ascii=False) + '\n')
+        with self._lock:
+            self.cache_data[sample_id] = cache_entry
+            with open(self.cache_file, 'a', encoding='utf-8') as f:
+                f.write(json.dumps(cache_entry, ensure_ascii=False) + '\n')
 
     def is_cached(self, sample: Dict) -> bool:
         """
