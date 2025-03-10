@@ -123,7 +123,10 @@ class ConcurrentOpenAIClient(ConcurrentClient):
         # Then convert dictionaries to ChatCompletion objects
         chat_completions = []
         for dict_response in dict_responses:
-            chat_completion = ChatCompletion.model_validate(dict_response)
+            if dict_response is not None:
+                chat_completion = ChatCompletion.model_validate(dict_response)
+            else:
+                chat_completion = None
             chat_completions.append(chat_completion)
 
         return chat_completions

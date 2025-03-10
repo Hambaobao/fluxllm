@@ -94,7 +94,8 @@ class CacheClient:
             cached response associated with the sample
         """
         sample_id = self.hash(sample)
-        assert sample_id in self.cache_data, f"Sample {sample_id} not found in cache"
+        if sample_id not in self.cache_data:
+            return None
         return self.cache_data[sample_id]['response']
 
     def collect_results(self, samples: List[Dict], ignore_missing: bool = False) -> List[Dict]:
