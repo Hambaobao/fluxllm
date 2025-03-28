@@ -10,7 +10,7 @@ name = "fluxllm"
 version = "0.1.0.post1"
 description = "A blazing-fast gateway for asynchronous, high-concurrency LLM requests (OpenAI, Claude, etc.)."
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.12"
 license = { text = "MIT" }
 
 authors = [{ name = "Lei Zhang", email = "jameszhang2880@gmail.com" }]
