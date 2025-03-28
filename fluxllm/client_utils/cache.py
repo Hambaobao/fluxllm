@@ -33,6 +33,8 @@ class FluxCache:
             print(f"Found {len(cache_data)} cached samples")
         else:
             Path(self.cache_file).parent.mkdir(parents=True, exist_ok=True)
+            cache_data = {}
+            print(f"Initialized empty cache")
 
         self.cache_data.update(cache_data)
 

@@ -6,17 +6,23 @@ requires = ["setuptools>=42", "wheel"]
 include = ["fluxllm*"]
 
 [project]
-authors = [{ name = "Lei Zhang", email = "jameszhang2880@gmail.com" }]
-dependencies = ["openai", "rich"]
-description = "A blazing-fast gateway for asynchronous, high-concurrency LLM requests (OpenAI, Claude, etc.)."
-license = { text = "MIT" }
 name = "fluxllm"
+version = "0.1.0.post1"
+description = "A blazing-fast gateway for asynchronous, high-concurrency LLM requests (OpenAI, Claude, etc.)."
 readme = "README.md"
 requires-python = ">=3.9"
-version = "0.1.0.post1"
+license = { text = "MIT" }
+
+authors = [{ name = "Lei Zhang", email = "jameszhang2880@gmail.com" }]
+
 
 classifiers = [
   "Programming Language :: Python :: 3",
   "License :: OSI Approved :: MIT License",
   "Operating System :: OS Independent",
 ]
+
+dependencies = ["openai", "rich"]
+
+[project.optional-dependencies]
+test = ["pytest", "fastapi", "uvicorn"]

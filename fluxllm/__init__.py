@@ -1,4 +1,4 @@
-from fluxllm.client_utils.cache import CacheClient
-from fluxllm.clients.openai import OpenAIClient
+from fluxllm.client_utils.cache import FluxCache
+from fluxllm.clients.openai import FluxOpenAI
 
-__all__ = ["OpenAIClient", "CacheClient"]
+__all__ = ["FluxOpenAI", "FluxCache"]
