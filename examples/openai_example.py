@@ -2,7 +2,7 @@ import argparse
 import json
 from typing import Dict, List
 
-from fluxllm.clients.openai import FluxOpenAI
+from fluxllm.clients import FluxOpenAI
 
 
 def parse_args():
