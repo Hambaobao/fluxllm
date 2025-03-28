@@ -24,20 +24,30 @@ pip install fluxllm
 from fluxllm.clients import FluxOpenAI
 
 client = FluxOpenAI(
-    base_url=args.base_url,
-    api_key=args.api_key,
-    cache_file=args.cache_file,
-    max_retries=args.max_retries,
-    max_parallel_size=args.max_parallel_size,
+    base_url="https://api.openai.com/v1", # base url of the ai provider
+    api_key="sk-...", # api key of the ai provider
+    cache_file="/path/to/cache.jsonl", # path to the cache file
+    max_retries=3, # max retries for a request, set to None will retry infinitely
+    max_parallel_size=1024, # max 1024 requests concurrently
 )
 
-responses = client.request(
-    requests=requests,
-    model=args.model,
-    max_tokens=args.max_tokens,
-    temperature=args.temperature,
-    top_p=args.top_p,
-)
+# request is a object that passed to the endpoint of the ai provider
+request = {
+    "messages": [
+        {"role": "user", "content": "Hello, world!"},
+    ],
+    "model": "gpt-4o",
+    "max_tokens": 100,
+    "temperature": 0.5,
+    "top_p": 1,
+}
+# requests is a list of requests
+requests = [request] * 1000
 
+# The list of responses maintains the same order as the input requests.
+# If a request fails, its corresponding response will be None.
+responses = client.request(requests)
+
+# post-process the responses to get what you want
 contents = [response.choices[0].message.content for response in responses]
 ```
