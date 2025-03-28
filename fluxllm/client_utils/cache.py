@@ -1,13 +1,12 @@
-from pathlib import Path
-from typing import List, Dict, Any
-
-import os
-import json
 import hashlib
+import json
 import multiprocessing
+import os
+from pathlib import Path
+from typing import Any, Dict
 
 
-class CacheClient:
+class FluxCache:
     _lock = multiprocessing.Lock()
     _manager = multiprocessing.Manager()
 
@@ -28,16 +27,13 @@ class CacheClient:
         """
         Load the cache file
         """
-        cache_data = {}
         if self.cache_file.exists():
-            with self._lock:
-                with open(self.cache_file, 'r', encoding='utf-8') as f:
-                    for line in f:
-                        data = json.loads(line)
-                        cache_data[data['id']] = data
+            with open(self.cache_file, 'r', encoding='utf-8') as f:
+                cache_data = {item["id"]: item for item in (json.loads(line) for line in f)}
             print(f"Found {len(cache_data)} cached samples")
         else:
             Path(self.cache_file).parent.mkdir(parents=True, exist_ok=True)
+
         self.cache_data.update(cache_data)
 
     def hash(self, sample: Dict) -> str:
@@ -68,9 +64,9 @@ class CacheClient:
             cache_entry = {'id': sample_id, 'response': response}
 
         with self._lock:
-            self.cache_data[sample_id] = cache_entry
             with open(self.cache_file, 'a', encoding='utf-8') as f:
                 f.write(json.dumps(cache_entry, ensure_ascii=False) + '\n')
+            self.cache_data[sample_id] = cache_entry
 
     def is_cached(self, sample: Dict) -> bool:
         """
@@ -84,7 +80,7 @@ class CacheClient:
         sample_id = self.hash(sample)
         return sample_id in self.cache_data
 
-    def collect_result(self, sample: Dict) -> Dict:
+    def collect_result(self, sample: Dict) -> Dict | None:
         """
         Get the cached response corresponding to the sample.
 
@@ -97,21 +93,3 @@ class CacheClient:
         if sample_id not in self.cache_data:
             return None
         return self.cache_data[sample_id]['response']
-
-    def collect_results(self, samples: List[Dict], ignore_missing: bool = False) -> List[Dict]:
-        """
-        Get the cached responses for a list of samples
-
-        Args:
-            samples: list of samples to get responses for
-            ignore_missing: if True, ignore samples that are not found in the cache
-        Returns:
-            list of cached responses
-        """
-        results = []
-        for sample in samples:
-            if self.is_cached(sample):
-                results.append(self.collect_result(sample))
-            elif not ignore_missing:
-                raise ValueError(f"Sample {sample} not found in cache")
-        return results
