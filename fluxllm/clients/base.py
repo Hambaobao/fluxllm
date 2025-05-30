@@ -39,13 +39,14 @@ class BaseClient:
         self.max_parallel_size = max_parallel_size
         self.progress_msg = progress_msg
 
-    async def save_to_cache_thread_safe(self, sample: Dict, response: Dict):
+    async def save_to_cache_thread_safe(self, sample: Dict, response: Dict, save_request: bool = False):
         async with self.lock:
-            self.cache.save_to_cache(sample, response)
+            self.cache.save_to_cache(sample, response, save_request=save_request)
 
     async def request_async(
         self,
         requests: List[Dict[str, Any]],
+        save_request: bool = False,
         **kwargs,
     ) -> None:
         """
@@ -88,7 +89,7 @@ class BaseClient:
                 async with semaphore:
                     response = await self.make_request_async(request, **kwargs)
                     if response is not None:
-                        await self.save_to_cache_thread_safe(request, response)
+                        await self.save_to_cache_thread_safe(request, response, save_request=save_request)
                         progress.advance(task)
                         print(f"Request succeeded for request: {self.cache.hash(request)}", flush=True)
                     else:
@@ -103,7 +104,7 @@ class BaseClient:
             for worker_task in workers:
                 worker_task.cancel()
 
-    def request(self, requests: List[Dict[str, Any]], **kwargs) -> List[ChatCompletion | None]:
+    def request(self, requests: List[Dict[str, Any]], save_request: bool = False, **kwargs) -> List[ChatCompletion | None]:
         """
         Make requests for all uncached samples in given list.
         This is a synchronous wrapper around request_async.
@@ -118,7 +119,7 @@ class BaseClient:
         print(f"Remaining {len(remaining_requests)} requests to generate", flush=True)
 
         # request the responses
-        asyncio.run(self.request_async(requests=remaining_requests, **kwargs))
+        asyncio.run(self.request_async(requests=remaining_requests, save_request=save_request, **kwargs))
 
         # collect the responses
         responses = self.collect_responses(requests)
