@@ -1,9 +1,9 @@
-from fluxllm.clients import FluxOpenAI
+from fluxllm.clients import FluxOpenAIChat
 
 
 def test_basic():
 
-    client = FluxOpenAI(
+    client = FluxOpenAIChat(
         base_url="http://127.0.0.1:8008/v1",
         api_key="test",
         cache_file="cache.jsonl",

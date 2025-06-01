@@ -2,7 +2,7 @@ import argparse
 import json
 from typing import Dict, List
 
-from fluxllm.clients import FluxOpenAI
+from fluxllm.clients import FluxOpenAIChat
 
 
 def parse_args():
@@ -60,7 +60,7 @@ if __name__ == "__main__":
     args = parse_args()
 
     # initialize client
-    client = FluxOpenAI(
+    client = FluxOpenAIChat(
         base_url=args.base_url,
         api_key=args.api_key,
         cache_file=args.cache_file,
