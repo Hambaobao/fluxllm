@@ -7,9 +7,9 @@ from openai.types.chat import ChatCompletion
 from fluxllm.clients.base import BaseClient
 
 
-class FluxOpenAI(BaseClient):
+class FluxOpenAIChat(BaseClient):
     """
-    A client that can handle multiple requests concurrently.
+    A client that can handle multiple requests concurrently for OpenAI chat completions.
     """
 
     SUPPORT_ARGS = {
