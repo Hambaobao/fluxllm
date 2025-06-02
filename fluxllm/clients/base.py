@@ -1,8 +1,9 @@
 import asyncio
 import os
 import random
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
+from aiolimiter import AsyncLimiter
 from openai.types.chat import ChatCompletion
 
 from fluxllm.client_utils import FluxCache, create_progress
@@ -11,13 +12,19 @@ from fluxllm.client_utils import FluxCache, create_progress
 class BaseClient:
     """
     A client that allows for concurrent requests to the same API.
+    
+    Rate limiting is implemented using both queries-per-second (QPS) and 
+    queries-per-minute (QPM) controls. If both are specified, both limits 
+    will be enforced simultaneously. Concurrency is automatically calculated 
+    based on the more restrictive of the two rate limits.
     """
 
     def __init__(
         self,
         cache_file: str | None = None,
         max_retries: int | None = None,
-        max_parallel_size: int = 1,
+        max_qps: Optional[float] = None,  # None means no QPS rate limiting
+        max_qpm: float = 100,  # Default to 100 requests per minute
         progress_msg: str = "Requesting...",
     ):
         """
@@ -26,7 +33,8 @@ class BaseClient:
         Args:
             cache_file: the cache file to use.
             max_retries: the maximum number of retries to make, defaults to `None`.
-            max_parallel_size: the number of requests to make concurrently, defaults to `1`.
+            max_qps: maximum queries per second (rate limit), defaults to `None`.
+            max_qpm: maximum queries per minute (rate limit), defaults to `100`.
             progress_msg: the message to display in the progress bar, defaults to `Requesting...`.
         """
         if cache_file is None:
@@ -36,7 +44,35 @@ class BaseClient:
         self.cache = FluxCache(cache_file)
         self.lock = asyncio.Lock()
         self.max_retries = max_retries
-        self.max_parallel_size = max_parallel_size
+        self.max_qps = max_qps
+        self.max_qpm = max_qpm
+        
+        # Configure rate limiters for both QPS and QPM if specified
+        self.qps_limiter = None
+        self.qpm_limiter = None
+        
+        if max_qps is not None and max_qps > 0:
+            self.qps_limiter = AsyncLimiter(max_rate=max_qps, time_period=1.0)
+            
+        if max_qpm > 0:
+            self.qpm_limiter = AsyncLimiter(max_rate=max_qpm, time_period=60.0)
+            
+        # Calculate optimal concurrency based on rate limits
+        if max_qps is not None and max_qps > 0:
+            qps_concurrency = max(1, int(max_qps))
+        else:
+            qps_concurrency = float('inf')
+            
+        if max_qpm > 0:
+            qpm_concurrency = max(1, int(max_qpm / 60))
+        else:
+            qpm_concurrency = float('inf')
+            
+        # Use the more restrictive concurrency limit
+        self.concurrency = min(qps_concurrency, qpm_concurrency)
+        if self.concurrency == float('inf'):
+            self.concurrency = 1  # Default if no rate limits are set
+            
         self.progress_msg = progress_msg
 
     async def save_to_cache_thread_safe(self, sample: Dict, response: Dict, save_request: bool = False):
@@ -52,10 +88,12 @@ class BaseClient:
         """
         Make requests for all uncached samples in given list.
         This function is designed to handle the generation of multiple responses in a batch.
-        It uses a semaphore to control the number of concurrent requests.
+        It uses a semaphore to control the number of concurrent requests and rate limiters
+        to control the request rate.
 
         Args:
             requests: list of requests to generate responses for
+            save_request: whether to save the request in the cache
             **kwargs: additional arguments to pass to request_async
         """
 
@@ -66,7 +104,7 @@ class BaseClient:
         failure_counts = {self.cache.hash(request): 0 for request in requests}
 
         # limit the number of concurrent requests
-        semaphore = asyncio.Semaphore(self.max_parallel_size)
+        semaphore = asyncio.Semaphore(self.concurrency)
 
         async def after_failure(request: Dict):
             failure_counts[self.cache.hash(request)] += 1
@@ -87,7 +125,27 @@ class BaseClient:
             while not task_queue.empty():
                 request = await task_queue.get()
                 async with semaphore:
-                    response = await self.make_request_async(request, **kwargs)
+                    # Apply two-level rate limiting if configured
+                    async def execute_with_rate_limiting():
+                        # Apply QPS rate limiting if configured
+                        if self.qps_limiter is not None:
+                            async with self.qps_limiter:
+                                # Apply QPM rate limiting if configured
+                                if self.qpm_limiter is not None:
+                                    async with self.qpm_limiter:
+                                        return await self.make_request_async(request, **kwargs)
+                                else:
+                                    return await self.make_request_async(request, **kwargs)
+                        # Only apply QPM rate limiting if QPS is not configured
+                        elif self.qpm_limiter is not None:
+                            async with self.qpm_limiter:
+                                return await self.make_request_async(request, **kwargs)
+                        # No rate limiting
+                        else:
+                            return await self.make_request_async(request, **kwargs)
+                    
+                    response = await execute_with_rate_limiting()
+                    
                     if response is not None:
                         await self.save_to_cache_thread_safe(request, response, save_request=save_request)
                         progress.advance(task)
@@ -98,7 +156,7 @@ class BaseClient:
 
         with create_progress() as progress:
             task = progress.add_task(f"[cyan]{self.progress_msg}", total=len(requests))
-            workers = [asyncio.create_task(worker()) for _ in range(self.max_parallel_size)]
+            workers = [asyncio.create_task(worker()) for _ in range(self.concurrency)]
 
             await task_queue.join()
             for worker_task in workers:
