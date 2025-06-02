@@ -1,5 +1,5 @@
 import os
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from openai import AsyncOpenAI
 from openai.types.chat import ChatCompletion
@@ -45,8 +45,8 @@ class FluxOpenAIChat(BaseClient):
         max_retries: int | None = None,
         base_url: str | None = None,
         api_key: str | None = None,
-        max_parallel_size: int = 1,
-        max_qps: float = 0,
+        max_qps: Optional[float] = None,
+        max_qpm: float = 100,
     ):
         """
         Initialize the client.
@@ -56,15 +56,15 @@ class FluxOpenAIChat(BaseClient):
             - max_retries: the maximum number of retries to make, defaults to `None`.
             - base_url: OpenAI Compatible API base URL.
             - api_key: OpenAI API key.
-            - max_parallel_size: the number of requests to make concurrently, defaults to `1`.
-            - max_qps: maximum queries per second (rate limit), defaults to `0` (no rate limiting).
+            - max_qps: maximum queries per second (rate limit), defaults to `None` (falls back to max_qpm).
+            - max_qpm: maximum queries per minute (rate limit), defaults to `100`.
         """
 
         super().__init__(
             cache_file=cache_file, 
             max_retries=max_retries, 
-            max_parallel_size=max_parallel_size,
-            max_qps=max_qps
+            max_qps=max_qps,
+            max_qpm=max_qpm
         )
 
         # initialize the client

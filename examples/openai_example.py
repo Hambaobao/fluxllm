@@ -11,6 +11,11 @@ def parse_args():
         if value in ["none", "None"]:
             return None
         return int(value)
+    
+    def none_or_float(value):
+        if value in ["none", "None"]:
+            return None
+        return float(value)
 
     parser = argparse.ArgumentParser()
 
@@ -19,7 +24,8 @@ def parse_args():
     parser.add_argument("--output-file", type=str, required=True, help="Output file for generated data")
     parser.add_argument("--cache-file", type=str, default="cache.jsonl", help="Cache file for API responses")
     parser.add_argument("--max-retries", type=none_or_int, default=None, help="Maximum number of retries for API requests")
-    parser.add_argument("--max-parallel-size", type=int, default=1, help="Maximum number of parallel requests")
+    parser.add_argument("--max-qps", type=none_or_float, default=None, help="Maximum queries per second (rate limit)")
+    parser.add_argument("--max-qpm", type=float, default=100, help="Maximum queries per minute (rate limit)")
 
     # OpenAI API parameters
     parser.add_argument("--base-url", type=str, default=None, help="Base URL for the OpenAI API")
@@ -65,7 +71,8 @@ if __name__ == "__main__":
         api_key=args.api_key,
         cache_file=args.cache_file,
         max_retries=args.max_retries,
-        max_parallel_size=args.max_parallel_size,
+        max_qps=args.max_qps,
+        max_qpm=args.max_qpm,
     )
 
     # load the samples

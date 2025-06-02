@@ -1,7 +1,7 @@
 import asyncio
 import os
 import random
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from aiolimiter import AsyncLimiter
 from openai.types.chat import ChatCompletion
@@ -18,8 +18,8 @@ class BaseClient:
         self,
         cache_file: str | None = None,
         max_retries: int | None = None,
-        max_parallel_size: int = 1,
-        max_qps: float = 0,  # 0 means no rate limiting
+        max_qps: Optional[float] = None,  # None means no QPS rate limiting
+        max_qpm: float = 100,  # Default to 100 requests per minute
         progress_msg: str = "Requesting...",
     ):
         """
@@ -28,8 +28,8 @@ class BaseClient:
         Args:
             cache_file: the cache file to use.
             max_retries: the maximum number of retries to make, defaults to `None`.
-            max_parallel_size: the number of requests to make concurrently, defaults to `1`.
-            max_qps: maximum queries per second (rate limit), defaults to `0` (no rate limiting).
+            max_qps: maximum queries per second (rate limit), defaults to `None` (falls back to max_qpm).
+            max_qpm: maximum queries per minute (rate limit), defaults to `100`.
             progress_msg: the message to display in the progress bar, defaults to `Requesting...`.
         """
         if cache_file is None:
@@ -39,9 +39,28 @@ class BaseClient:
         self.cache = FluxCache(cache_file)
         self.lock = asyncio.Lock()
         self.max_retries = max_retries
-        self.max_parallel_size = max_parallel_size
         self.max_qps = max_qps
-        self.rate_limiter = AsyncLimiter(max_rate=max_qps, time_period=1.0) if max_qps > 0 else None
+        self.max_qpm = max_qpm
+        
+        # Configure rate limiter based on QPS or QPM
+        if max_qps is not None and max_qps > 0:
+            # QPS takes precedence if specified
+            self.rate_limiter = AsyncLimiter(max_rate=max_qps, time_period=1.0)
+        elif max_qpm > 0:
+            # Fall back to QPM if QPS is not specified
+            self.rate_limiter = AsyncLimiter(max_rate=max_qpm, time_period=60.0)
+        else:
+            # No rate limiting if both are disabled
+            self.rate_limiter = None
+            
+        # Calculate max parallel size based on rate limits
+        if max_qps is not None and max_qps > 0:
+            self.max_parallel_size = max(1, int(max_qps))
+        elif max_qpm > 0:
+            self.max_parallel_size = max(1, int(max_qpm / 60))
+        else:
+            self.max_parallel_size = 1
+            
         self.progress_msg = progress_msg
 
     async def save_to_cache_thread_safe(self, sample: Dict, response: Dict, save_request: bool = False):
