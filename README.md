@@ -21,9 +21,9 @@ pip install fluxllm
 ## Usage
 
 ```python
-from fluxllm.clients import FluxOpenAI
+from fluxllm.clients import FluxOpenAIChat
 
-client = FluxOpenAI(
+client = FluxOpenAIChat(
     base_url="https://api.openai.com/v1", # base url of the ai provider
     api_key="sk-...", # api key of the ai provider
     cache_file="/path/to/cache.jsonl", # path to the cache file
