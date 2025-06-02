@@ -28,7 +28,8 @@ client = FluxOpenAIChat(
     api_key="sk-...", # api key of the ai provider
     cache_file="/path/to/cache.jsonl", # path to the cache file
     max_retries=3, # max retries for a request, set to None will retry infinitely
-    max_parallel_size=1024, # max 1024 requests concurrently
+    max_qps=None, # maximum queries per second (rate limit), defaults to None (falls back to max_qpm)
+    max_qpm=100, # maximum queries per minute (rate limit), defaults to 100
 )
 
 # request is a object that passed to the endpoint of the ai provider
