@@ -79,6 +79,36 @@ class BaseClient:
         async with self.lock:
             self.cache.save_to_cache(sample, response, save_request=save_request)
 
+    async def execute_with_rate_limiting(self, request: Dict, **kwargs):
+        """
+        Execute a request with rate limiting applied.
+        
+        This method applies both QPS and QPM rate limiting if configured.
+        
+        Args:
+            request: The request to execute
+            **kwargs: Additional arguments to pass to make_request_async
+            
+        Returns:
+            The response from make_request_async
+        """
+        # Apply QPS rate limiting if configured
+        if self.qps_limiter is not None:
+            async with self.qps_limiter:
+                # Apply QPM rate limiting if configured
+                if self.qpm_limiter is not None:
+                    async with self.qpm_limiter:
+                        return await self.make_request_async(request, **kwargs)
+                else:
+                    return await self.make_request_async(request, **kwargs)
+        # Only apply QPM rate limiting if QPS is not configured
+        elif self.qpm_limiter is not None:
+            async with self.qpm_limiter:
+                return await self.make_request_async(request, **kwargs)
+        # No rate limiting
+        else:
+            return await self.make_request_async(request, **kwargs)
+
     async def request_async(
         self,
         requests: List[Dict[str, Any]],
@@ -88,8 +118,7 @@ class BaseClient:
         """
         Make requests for all uncached samples in given list.
         This function is designed to handle the generation of multiple responses in a batch.
-        It uses a semaphore to control the number of concurrent requests and rate limiters
-        to control the request rate.
+        It uses rate limiters to control the request rate.
 
         Args:
             requests: list of requests to generate responses for
@@ -102,9 +131,6 @@ class BaseClient:
         for request in requests:
             await task_queue.put(request)
         failure_counts = {self.cache.hash(request): 0 for request in requests}
-
-        # limit the number of concurrent requests
-        semaphore = asyncio.Semaphore(self.concurrency)
 
         async def after_failure(request: Dict):
             failure_counts[self.cache.hash(request)] += 1
@@ -124,34 +150,14 @@ class BaseClient:
         async def worker():
             while not task_queue.empty():
                 request = await task_queue.get()
-                async with semaphore:
-                    # Apply two-level rate limiting if configured
-                    async def execute_with_rate_limiting():
-                        # Apply QPS rate limiting if configured
-                        if self.qps_limiter is not None:
-                            async with self.qps_limiter:
-                                # Apply QPM rate limiting if configured
-                                if self.qpm_limiter is not None:
-                                    async with self.qpm_limiter:
-                                        return await self.make_request_async(request, **kwargs)
-                                else:
-                                    return await self.make_request_async(request, **kwargs)
-                        # Only apply QPM rate limiting if QPS is not configured
-                        elif self.qpm_limiter is not None:
-                            async with self.qpm_limiter:
-                                return await self.make_request_async(request, **kwargs)
-                        # No rate limiting
-                        else:
-                            return await self.make_request_async(request, **kwargs)
-                    
-                    response = await execute_with_rate_limiting()
-                    
-                    if response is not None:
-                        await self.save_to_cache_thread_safe(request, response, save_request=save_request)
-                        progress.advance(task)
-                        print(f"Request succeeded for request: {self.cache.hash(request)}", flush=True)
-                    else:
-                        await after_failure(request)
+                response = await self.execute_with_rate_limiting(request, **kwargs)
+                
+                if response is not None:
+                    await self.save_to_cache_thread_safe(request, response, save_request=save_request)
+                    progress.advance(task)
+                    print(f"Request succeeded for request: {self.cache.hash(request)}", flush=True)
+                else:
+                    await after_failure(request)
                 task_queue.task_done()
 
         with create_progress() as progress:
