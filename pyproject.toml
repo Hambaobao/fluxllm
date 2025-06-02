@@ -22,7 +22,7 @@ classifiers = [
   "Operating System :: OS Independent",
 ]
 
-dependencies = ["openai", "rich"]
+dependencies = ["openai", "rich", "aiolimiter"]
 
 [project.optional-dependencies]
 test = ["pytest", "fastapi", "uvicorn"]

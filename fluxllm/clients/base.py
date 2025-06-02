@@ -3,6 +3,7 @@ import os
 import random
 from typing import Any, Dict, List
 
+from aiolimiter import AsyncLimiter
 from openai.types.chat import ChatCompletion
 
 from fluxllm.client_utils import FluxCache, create_progress
@@ -18,6 +19,7 @@ class BaseClient:
         cache_file: str | None = None,
         max_retries: int | None = None,
         max_parallel_size: int = 1,
+        max_qps: float = 0,  # 0 means no rate limiting
         progress_msg: str = "Requesting...",
     ):
         """
@@ -27,6 +29,7 @@ class BaseClient:
             cache_file: the cache file to use.
             max_retries: the maximum number of retries to make, defaults to `None`.
             max_parallel_size: the number of requests to make concurrently, defaults to `1`.
+            max_qps: maximum queries per second (rate limit), defaults to `0` (no rate limiting).
             progress_msg: the message to display in the progress bar, defaults to `Requesting...`.
         """
         if cache_file is None:
@@ -37,6 +40,8 @@ class BaseClient:
         self.lock = asyncio.Lock()
         self.max_retries = max_retries
         self.max_parallel_size = max_parallel_size
+        self.max_qps = max_qps
+        self.rate_limiter = AsyncLimiter(max_rate=max_qps, time_period=1.0) if max_qps > 0 else None
         self.progress_msg = progress_msg
 
     async def save_to_cache_thread_safe(self, sample: Dict, response: Dict, save_request: bool = False):
@@ -52,10 +57,12 @@ class BaseClient:
         """
         Make requests for all uncached samples in given list.
         This function is designed to handle the generation of multiple responses in a batch.
-        It uses a semaphore to control the number of concurrent requests.
+        It uses a semaphore to control the number of concurrent requests and a rate limiter
+        to control the request rate (if max_qps > 0).
 
         Args:
             requests: list of requests to generate responses for
+            save_request: whether to save the request in the cache
             **kwargs: additional arguments to pass to request_async
         """
 
@@ -87,7 +94,13 @@ class BaseClient:
             while not task_queue.empty():
                 request = await task_queue.get()
                 async with semaphore:
-                    response = await self.make_request_async(request, **kwargs)
+                    # Apply rate limiting if configured
+                    if self.rate_limiter is not None:
+                        async with self.rate_limiter:
+                            response = await self.make_request_async(request, **kwargs)
+                    else:
+                        response = await self.make_request_async(request, **kwargs)
+                    
                     if response is not None:
                         await self.save_to_cache_thread_safe(request, response, save_request=save_request)
                         progress.advance(task)

@@ -9,6 +9,7 @@ def test_basic():
         cache_file="cache.jsonl",
         max_retries=3,
         max_parallel_size=10,
+        max_qps=5,  # Add rate limiting of 5 requests per second
     )
 
     request = {

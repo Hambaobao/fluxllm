@@ -46,6 +46,7 @@ class FluxOpenAIChat(BaseClient):
         base_url: str | None = None,
         api_key: str | None = None,
         max_parallel_size: int = 1,
+        max_qps: float = 0,
     ):
         """
         Initialize the client.
@@ -55,9 +56,16 @@ class FluxOpenAIChat(BaseClient):
             - max_retries: the maximum number of retries to make, defaults to `None`.
             - base_url: OpenAI Compatible API base URL.
             - api_key: OpenAI API key.
+            - max_parallel_size: the number of requests to make concurrently, defaults to `1`.
+            - max_qps: maximum queries per second (rate limit), defaults to `0` (no rate limiting).
         """
 
-        super().__init__(cache_file=cache_file, max_retries=max_retries, max_parallel_size=max_parallel_size)
+        super().__init__(
+            cache_file=cache_file, 
+            max_retries=max_retries, 
+            max_parallel_size=max_parallel_size,
+            max_qps=max_qps
+        )
 
         # initialize the client
         self.client = AsyncOpenAI(
