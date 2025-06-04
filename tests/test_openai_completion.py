@@ -40,15 +40,17 @@ async def test_flux_openai_completion(mock_openai_completion):
     if os.path.exists(cache_file):
         os.remove(cache_file)
     
-    # Create the client with mocked AsyncOpenAI
-    with patch("openai.AsyncOpenAI") as mock_async_openai:
+    # Mock the AsyncOpenAI client
+    with patch("fluxllm.clients.openai.AsyncOpenAI") as mock_async_openai:
         # Set up the mock
         mock_client = MagicMock()
-        mock_client.completions.create = AsyncMock(return_value=mock_openai_completion)
+        mock_completions = MagicMock()
+        mock_completions.create = AsyncMock(return_value=mock_openai_completion)
+        mock_client.completions = mock_completions
         mock_async_openai.return_value = mock_client
         
-        # Create the client
-        client = FluxOpenAICompletion(cache_file=cache_file)
+        # Create the client with a dummy API key
+        client = FluxOpenAICompletion(cache_file=cache_file, api_key="dummy_key")
         
         # Create a test request
         request = {
