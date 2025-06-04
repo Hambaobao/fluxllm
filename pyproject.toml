@@ -25,4 +25,4 @@ classifiers = [
 dependencies = ["openai", "rich", "aiolimiter"]
 
 [project.optional-dependencies]
-test = ["pytest", "fastapi", "uvicorn"]
+test = ["pytest", "pytest-asyncio", "fastapi", "uvicorn"]
