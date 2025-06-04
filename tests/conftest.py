@@ -51,6 +51,33 @@ async def chat_completions(request: Request):
         })
 
 
+@app.post("/v1/completions")
+async def completions(request: Request):
+    data = await request.json()
+    prompt = data.get("prompt", "unknown")
+
+    return JSONResponse(
+        content={
+            "id": "cmpl-123",
+            "object": "text_completion",
+            "created": 1677858242,
+            "model": data.get("model", "text-davinci-003"),
+            "choices": [
+                {
+                    "text": f"Response to: {prompt}",
+                    "index": 0,
+                    "logprobs": None,
+                    "finish_reason": "stop"
+                }
+            ],
+            "usage": {
+                "prompt_tokens": 5,
+                "completion_tokens": 7,
+                "total_tokens": 12
+            }
+        })
+
+
 def run_mock_server():
     uvicorn.run(app, host="127.0.0.1", port=8008, log_level="error")
 
